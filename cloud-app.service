@@ -1,0 +1,47 @@
+[Unit]
+Description=Cloud Init Application Service
+Documentation=https://github.com/your-org/cloud-init-app-deployer
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=appuser
+Group=appuser
+WorkingDirectory=/opt/app
+
+# 环境变量
+Environment=APP_HOME=/opt/app
+Environment=APP_CONFIG=/opt/app/config/app.conf
+Environment=APP_DATA_DIR=/opt/app/data
+Environment=APP_LOG_DIR=/opt/app/logs
+
+# 启动命令
+ExecStart=/opt/app/scripts/app/start.sh
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/opt/app/scripts/app/stop.sh
+
+# 重启策略
+Restart=always
+RestartSec=10
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# 安全设置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/app/data /opt/app/logs /tmp
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# 日志设置
+StandardOutput=append:/opt/app/logs/app.log
+StandardError=append:/opt/app/logs/app-error.log
+SyslogIdentifier=cloud-app
+
+[Install]
+WantedBy=multi-user.target

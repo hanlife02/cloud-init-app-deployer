@@ -1,0 +1,22 @@
+# Cloud-Init App Deployer - 定时任务配置
+# 
+# 该文件定义了应用监控和更新的定时任务
+# 使用方法：sudo cp crontab /etc/cron.d/app-monitor
+
+# 每5分钟执行健康检查
+*/5 * * * * root /opt/app/scripts/monitor/health-check.sh >> /opt/app/logs/monitor.log 2>&1
+
+# 每天凌晨2点检查应用更新
+0 2 * * * root /opt/app/scripts/update/check-update.sh >> /opt/app/logs/update.log 2>&1
+
+# 每小时轮转日志文件（防止日志过大）
+0 * * * * root /opt/app/scripts/monitor/rotate-logs.sh >> /opt/app/logs/system.log 2>&1
+
+# 每天凌晨3点清理7天前的日志文件
+0 3 * * * root find /opt/app/logs -name "*.log.*" -mtime +7 -delete
+
+# 每周日凌晨4点生成系统状态报告
+0 4 * * 0 root /opt/app/scripts/monitor/weekly-report.sh >> /opt/app/logs/reports.log 2>&1
+
+# 每月1日凌晨5点执行系统维护
+0 5 1 * * root /opt/app/scripts/monitor/monthly-maintenance.sh >> /opt/app/logs/maintenance.log 2>&1

@@ -1,0 +1,111 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - wget
+  - git
+  - cron
+  - systemd
+
+users:
+  - name: appuser
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    home: /home/appuser
+
+write_files:
+  - path: /opt/app/config/app.conf
+    content: |
+      # Application configuration
+      APP_NAME=cloud-init-app
+      APP_PORT=8080
+      LOG_LEVEL=info
+      UPDATE_INTERVAL=3600
+    permissions: '0644'
+    owner: root:root
+
+  - path: /etc/systemd/system/cloud-app.service
+    content: |
+      [Unit]
+      Description=Cloud Init Application
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=appuser
+      Group=appuser
+      WorkingDirectory=/opt/app
+      ExecStart=/opt/app/scripts/app/start.sh
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+    owner: root:root
+
+  - path: /etc/cron.d/app-monitor
+    content: |
+      # 每5分钟检查应用健康状态
+      */5 * * * * root /opt/app/scripts/monitor/health-check.sh >> /opt/app/logs/monitor.log 2>&1
+
+      # 每天凌晨2点检查更新
+      0 2 * * * root /opt/app/scripts/update/check-update.sh >> /opt/app/logs/update.log 2>&1
+
+      # 每小时清理过期日志（保留7天）
+      0 * * * * root find /opt/app/logs -name "*.log" -mtime +7 -delete
+    permissions: '0644'
+    owner: root:root
+
+  - path: /opt/app/logs/.gitkeep
+    content: |
+      # 保持日志目录存在
+    permissions: '0644'
+    owner: appuser:appuser
+
+runcmd:
+  # 创建应用目录结构
+  - mkdir -p /opt/app/scripts/{app,update,monitor}
+  - mkdir -p /opt/app/config
+  - mkdir -p /opt/app/data
+  - mkdir -p /opt/app/logs
+  
+  # 设置目录权限
+  - chown -R appuser:appuser /opt/app
+  - chmod -R 755 /opt/app
+  
+  # 复制脚本文件到目标位置
+  - cp -r /tmp/cloud-init-scripts/* /opt/app/scripts/ 2>/dev/null || true
+  
+  # 设置脚本执行权限
+  - find /opt/app/scripts -name "*.sh" -exec chmod +x {} \;
+  
+  # 启用并启动cron服务
+  - systemctl enable cron
+  - systemctl start cron
+  
+  # 重新加载systemd配置
+  - systemctl daemon-reload
+  
+  # 执行应用安装（如果脚本存在）
+  - /opt/app/scripts/app/install.sh || echo "Install script not found"
+  - /opt/app/scripts/app/configure.sh || echo "Configure script not found"
+  
+  # 启用并启动应用服务
+  - systemctl enable cloud-app.service
+  - systemctl start cloud-app.service || echo "Application service start failed"
+  
+  # 记录部署完成
+  - echo "$(date): Cloud-init deployment completed" >> /opt/app/logs/deployment.log
+
+final_message: |
+  Cloud-Init App Deployer has been successfully configured!
+  
+  Application directory: /opt/app
+  Service name: cloud-app.service
+  Log directory: /opt/app/logs
+  
+  To check service status: systemctl status cloud-app.service
+  To view logs: journalctl -u cloud-app.service -f
