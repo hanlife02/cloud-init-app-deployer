@@ -12,9 +12,121 @@
 - 腾讯云
 - 华为云
 
-### 2. 使用 Cloud-Init 部署
+### 2. 系统要求
 
-#### 方法一：直接使用 user-data（推荐）
+- **操作系统**: Ubuntu 18.04+, CentOS 7+, Amazon Linux 2
+- **内存**: 至少 1GB RAM
+- **磁盘**: 至少 10GB 可用空间
+- **网络**: 需要访问互联网进行软件包下载
+- **权限**: 需要 sudo 权限
+
+### 3. 手动部署步骤（推荐用于生产环境）
+
+如果您需要在现有的云服务器上手动部署，请按以下步骤操作：
+
+#### 步骤 1: 准备服务器环境
+
+```bash
+# 更新系统包
+sudo apt update && sudo apt upgrade -y
+
+# 安装必要软件 (Ubuntu/Debian)
+sudo apt install -y git curl wget cloud-init cron
+
+# 对于 CentOS/RHEL
+# sudo yum install -y git curl wget cloud-init cronie
+# sudo systemctl enable crond && sudo systemctl start crond
+```
+
+#### 步骤 2: 克隆项目
+
+```bash
+# 克隆项目到服务器
+git clone https://github.com/your-username/Cloud-Init-App-Deployer.git /opt/cloud-app-deployer
+cd /opt/cloud-app-deployer
+
+# 设置项目目录所有者
+sudo chown -R $USER:$USER /opt/cloud-app-deployer
+```
+
+#### 步骤 3: 配置环境
+
+```bash
+# 复制并编辑配置文件
+cp config.env.example config.env
+nano config.env
+
+# 设置脚本执行权限
+chmod +x scripts/app/*.sh
+chmod +x scripts/update/*.sh
+chmod +x scripts/monitor/*.sh
+chmod +x verify-setup.sh
+```
+
+#### 步骤 4: 创建必要目录
+
+```bash
+# 创建日志目录
+sudo mkdir -p /var/log/cloud-app-deployer
+sudo mkdir -p /opt/app/logs
+sudo mkdir -p /opt/app/data
+sudo mkdir -p /opt/app/config
+
+# 设置权限
+sudo chown -R $USER:$USER /var/log/cloud-app-deployer
+sudo chown -R $USER:$USER /opt/app
+```
+
+#### 步骤 5: 运行安装脚本
+
+```bash
+# 运行安装脚本
+sudo ./scripts/app/install.sh
+
+# 配置应用
+sudo ./scripts/app/configure.sh
+
+# 启动应用
+sudo ./scripts/app/start.sh
+```
+
+#### 步骤 6: 配置定时任务
+
+```bash
+# 安装定时任务
+sudo cp cron/crontab /etc/cron.d/cloud-app-monitor
+sudo chmod 644 /etc/cron.d/cloud-app-monitor
+sudo systemctl restart cron
+```
+
+#### 步骤 7: 配置系统服务
+
+```bash
+# 安装 systemd 服务
+sudo cp cloud-app.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable cloud-app
+sudo systemctl start cloud-app
+```
+
+#### 步骤 8: 验证部署
+
+```bash
+# 运行验证脚本
+./verify-setup.sh
+
+# 检查服务状态
+sudo systemctl status cloud-app
+sudo systemctl status cron
+
+# 检查定时任务
+sudo crontab -l
+crontab -l
+```
+
+### 4. 使用 Cloud-Init 自动部署
+
+#### 方法一：直接使用 user-data（推荐用于新实例）
 
 1. 将 `cloud-init/user-data` 文件内容复制到云平台的用户数据/自定义数据字段中
 2. 创建实例时选择支持 cloud-init 的操作系统镜像（如 Ubuntu 18.04+, CentOS 7+, Amazon Linux 2）
@@ -27,7 +139,7 @@
 3. 制作镜像快照
 4. 使用自定义镜像创建新实例
 
-### 3. AWS EC2 部署示例
+### 5. AWS EC2 部署示例
 
 ```bash
 # 使用 AWS CLI 创建实例
@@ -40,7 +152,7 @@ aws ec2 run-instances \
     --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=cloud-init-app}]'
 ```
 
-### 4. 验证部署
+### 6. 验证部署
 
 部署完成后，可以通过以下方式验证：
 
@@ -58,6 +170,42 @@ tail -f /opt/app/logs/deployment.log
 # 检查定时任务
 sudo crontab -l
 ```
+
+## 重要提醒
+
+### 在云服务器上运行的关键步骤
+
+1. **确保网络连接**
+   - 检查安全组配置，开放必要端口
+   - 确保服务器可以访问互联网
+
+2. **防火墙配置**
+   ```bash
+   # Ubuntu/Debian
+   sudo ufw allow ssh
+   sudo ufw allow 8080/tcp
+   sudo ufw enable
+   
+   # CentOS/RHEL
+   sudo firewall-cmd --permanent --add-port=22/tcp
+   sudo firewall-cmd --permanent --add-port=8080/tcp
+   sudo firewall-cmd --reload
+   ```
+
+3. **检查系统服务**
+   ```bash
+   # 确保关键服务正在运行
+   sudo systemctl status ssh
+   sudo systemctl status cron
+   sudo systemctl status cloud-app
+   ```
+
+4. **监控部署过程**
+   ```bash
+   # 实时查看部署日志
+   tail -f /var/log/cloud-init.log
+   tail -f /var/log/cloud-app-deployer/deployment.log
+   ```
 
 ## 配置说明
 
