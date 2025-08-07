@@ -1,4 +1,14 @@
 {
+  "openstack": {
+    "instance_name": "test",
+    "image": "Ubuntu 22.04",
+    "flavor": "m1.medium",
+    "network": "public",
+    "key_name": "my-key",
+    "security_groups": ["default"],
+    "availability_zone": "",
+    "user_data_file": "config.yaml"
+  },
   "deployments": {
     "docker": {
       "enabled": true,
