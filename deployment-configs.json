@@ -2,11 +2,11 @@
   "openstack": {
     "instance_name": "test",
     "image": "Ubuntu 22.04",
-    "flavor": "m1.medium",
-    "network": "public",
-    "key_name": "my-key",
+    "flavor": "p2",
+    "network": "pku",
+    "key_name": "Ethan",
     "security_groups": ["default"],
-    "availability_zone": "",
+    "availability_zone": "nova",
     "user_data_file": "config.yaml"
   },
   "deployments": {
