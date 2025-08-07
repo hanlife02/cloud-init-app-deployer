@@ -14,7 +14,7 @@
       "enabled": true,
       "version": "latest",
       "registry_mirror": "https://mirrors.pku.edu.cn/docker-ce/linux/ubuntu",
-      "test_container": true,
+      "test_container": false,
       "packages": [
         "apt-transport-https",
         "ca-certificates",
