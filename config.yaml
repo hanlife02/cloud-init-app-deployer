@@ -1,10 +1,8 @@
 #cloud-config
 
-# 更新
 package_update: true
 package_upgrade: true
 
-# 包
 packages:
   - apt-transport-https
   - ca-certificates
@@ -13,30 +11,15 @@ packages:
   - software-properties-common
 
 runcmd:
-  # 创建保存GPG密钥的目录
+  # docker 配置
   - mkdir -p /etc/apt/keyrings
-
-  # 添加Docker GPG密钥
   - curl -fsSL https://mirrors.pku.edu.cn/docker-ce/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-  # 添加Docker仓库
   - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.pku.edu.cn/docker-ce/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-  # 更新软件包索引
   - apt-get update
-
-  # 安装Docker CE
   - apt-get install -y docker-ce docker-ce-cli containerd.io
-
-  # 启动Docker服务
   - systemctl enable docker
   - systemctl start docker
-
-  # 验证安装 (可选)
   - docker --version > /root/docker-version.txt
-
-  # 运行测试容器 (可选)
   - docker run --rm hello-world > /root/docker-test.txt
 
-# 输出安装完成消息到日志
-final_message: "Docker installation is complete, system is up after $UPTIME seconds"
+final_message: "应用部署完成，系统已在 $UPTIME 秒后启动"

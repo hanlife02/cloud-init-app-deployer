@@ -1,0 +1,30 @@
+{
+  "deployments": {
+    "docker": {
+      "enabled": true,
+      "version": "latest",
+      "registry_mirror": "https://mirrors.pku.edu.cn/docker-ce/linux/ubuntu",
+      "test_container": true,
+      "packages": [
+        "apt-transport-https",
+        "ca-certificates",
+        "curl",
+        "gnupg2",
+        "software-properties-common"
+      ],
+      "commands": [
+        "mkdir -p /etc/apt/keyrings",
+        "curl -fsSL https://mirrors.pku.edu.cn/docker-ce/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg",
+        "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.pku.edu.cn/docker-ce/linux/ubuntu $(lsb_release -cs) stable\" | tee /etc/apt/sources.list.d/docker.list > /dev/null",
+        "apt-get update",
+        "apt-get install -y docker-ce docker-ce-cli containerd.io",
+        "systemctl enable docker",
+        "systemctl start docker",
+        "docker --version > /root/docker-version.txt"
+      ],
+      "test_commands": [
+        "docker run --rm hello-world > /root/docker-test.txt"
+      ]
+    }
+  }
+}
