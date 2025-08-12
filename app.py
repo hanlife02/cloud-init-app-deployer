@@ -3,6 +3,8 @@ from flask import Flask, request, jsonify
 import json
 import yaml
 import subprocess
+import tempfile
+import os
 from typing import Dict, Any
 
 app = Flask(__name__)
@@ -157,36 +159,47 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
         # 生成cloud-config内容
         yaml_content = generate_cloud_config(config_data)
         
-        # 构建OpenStack命令
-        cmd = [
-            'openstack', 'server', 'create',
-            '--image', openstack_config['image'],
-            '--flavor', openstack_config['flavor'],
-            '--network', openstack_config['network'],
-            '--user-data', '-',  # 从stdin读取user-data
-            '--key-name', openstack_config['key_name']
-        ]
+        # 创建临时文件保存user-data
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
+            temp_file.write(yaml_content)
+            temp_file_path = temp_file.name
         
-        # 可选参数
-        if 'security_groups' in openstack_config:
-            for sg in openstack_config['security_groups']:
-                cmd.extend(['--security-group', sg])
+        try:
+            # 构建OpenStack命令
+            cmd = [
+                'openstack', 'server', 'create',
+                '--image', openstack_config['image'],
+                '--flavor', openstack_config['flavor'],
+                '--network', openstack_config['network'],
+                '--user-data', temp_file_path,  # 使用临时文件
+                '--key-name', openstack_config['key_name']
+            ]
+            
+            # 可选参数
+            if 'security_groups' in openstack_config:
+                for sg in openstack_config['security_groups']:
+                    cmd.extend(['--security-group', sg])
+            
+            if 'availability_zone' in openstack_config:
+                cmd.extend(['--availability-zone', openstack_config['availability_zone']])
+            
+            # 实例名称
+            cmd.append(openstack_config['instance_name'])
+            
+            # 执行OpenStack命令
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            return {
+                'success': True,
+                'message': f'实例 {openstack_config["instance_name"]} 创建成功',
+                'output': result.stdout,
+                'user_data': yaml_content
+            }
         
-        if 'availability_zone' in openstack_config:
-            cmd.extend(['--availability-zone', openstack_config['availability_zone']])
-        
-        # 实例名称
-        cmd.append(openstack_config['instance_name'])
-        
-        # 执行OpenStack命令，通过stdin传递user-data
-        result = subprocess.run(cmd, input=yaml_content, text=True, capture_output=True, check=True)
-        
-        return {
-            'success': True,
-            'message': f'实例 {openstack_config["instance_name"]} 创建成功',
-            'output': result.stdout,
-            'user_data': yaml_content
-        }
+        finally:
+            # 清理临时文件
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
         
     except subprocess.CalledProcessError as e:
         return {
