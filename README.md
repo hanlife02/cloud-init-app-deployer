@@ -2,59 +2,57 @@
  * @Author: Ethan yanghan0911@gmail.com
  * @Date: 2025-08-07 20:39:14
  * @LastEditors: Ethan yanghan0911@gmail.com
- * @LastEditTime: 2025-08-07 21:30:41
+ * @LastEditTime: 2025-08-12 21:53:13
  * @FilePath: /Cloud-Init-App-Deployer/README.md
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 -->
-### 1. 配置应用
-`deployment-configs.json` 文件，设置需要部署的应用：
+# Cloud-Init App Deployer
 
-### 2. 一键部署
+基于Flask的API服务，接收JSON配置生成Cloud-Init内容并直接启动OpenStack实例。
+
+## 使用方法
+
+### 1. 启动服务
 ```bash
-./deploy.sh
+pip install -r requirements.txt
+python3 app.py
 ```
 
-## 文件说明
-
-- `deployment-configs.json` - 应用部署配置（包含OpenStack参数）
-- `deploy.sh` - 一键部署脚本
-- `generate_config.sh` - 配置生成脚本  
-- `config.yaml` - 生成的 Cloud-Init 配置文件
-
-## 支持的应用
-
-| 应用 | 说明 |
-|------|------|
-| docker | Docker CE 容器运行时 |
-
-## 添加新应用
-
-在 `deployment-configs.json` 中添加新应用配置：
-
-```json
-{
-  "deployments": {
-    "your-app": {
-      "enabled": true,
-      "version": "latest",
-      "packages": ["package1", "package2"],
-      "commands": [
-        "command1",
-        "command2"
-      ],
-      "test_container": false,
-      "test_commands": ["test-command"]
-    }
-  }
-}
-```
-
-## 要求
-
-- Bash 4.0+
-- 可选：`jq` (用于更好的 JSON 解析性能)
-
+### 2. 部署实例（推荐方式）
 ```bash
-# 安装 jq (可选)
-sudo apt-get install jq
+curl -X POST http://localhost:5000/api/deploy-services \
+  -H "Content-Type: application/json" \
+  -d '{
+    "openstack": {
+      "instance_name": "test",
+      "image": "Ubuntu 22.04",
+      "flavor": "p2",
+      "network": "pku",
+      "key_name": "Ethan"
+    },
+    "enable_docker": true,
+    "enable_nginx": false,
+    "enable_mysql": false,
+    "enable_nodejs": false
+  }'
 ```
+
+### 3. 查看实例
+```bash
+curl http://localhost:5000/api/instances
+```
+
+## API接口
+
+- `POST /api/deploy-services` - 接收OpenStack配置并根据enable_*参数选择性部署服务（推荐）
+- `POST /api/deploy` - 接收完整JSON配置并启动实例（自定义方式）
+- `POST /api/generate-config` - 仅生成配置文件
+- `GET /api/instances` - 列出实例
+- `GET /api/instance/status/<name>` - 实例状态
+
+## 可用服务
+
+- `docker` - Docker 容器引擎
+- `nginx` - Web 服务器
+- `mysql` - 数据库服务
+- `nodejs` - Node.js 运行时
