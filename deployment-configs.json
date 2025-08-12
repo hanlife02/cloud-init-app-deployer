@@ -1,17 +1,6 @@
 {
-  "openstack": {
-    "instance_name": "test",
-    "image": "Ubuntu 22.04",
-    "flavor": "p2",
-    "network": "pku",
-    "key_name": "Ethan",
-    "security_groups": ["default"],
-    "availability_zone": "nova",
-    "user_data_file": "config.yaml"
-  },
   "deployments": {
     "docker": {
-      "enabled": true,
       "version": "latest",
       "registry_mirror": "https://mirrors.pku.edu.cn/docker-ce/linux/ubuntu",
       "test_container": false,
@@ -34,6 +23,36 @@
       ],
       "test_commands": [
         "docker run --rm hello-world > /root/docker-test.txt"
+      ]
+    },
+    "nginx": {
+      "packages": [
+        "nginx"
+      ],
+      "commands": [
+        "systemctl enable nginx",
+        "systemctl start nginx",
+        "nginx -v > /root/nginx-version.txt"
+      ]
+    },
+    "mysql": {
+      "packages": [
+        "mysql-server"
+      ],
+      "commands": [
+        "systemctl enable mysql",
+        "systemctl start mysql",
+        "mysql --version > /root/mysql-version.txt"
+      ]
+    },
+    "nodejs": {
+      "packages": [
+        "nodejs",
+        "npm"
+      ],
+      "commands": [
+        "node --version > /root/node-version.txt",
+        "npm --version > /root/npm-version.txt"
       ]
     }
   }

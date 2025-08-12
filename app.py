@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 import json
 import yaml
-import os
 import subprocess
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 app = Flask(__name__)
+
+def load_deployment_configs() -> Dict[str, Any]:
+    """从本地文件加载部署配置（仅包含 Docker 等服务配置）"""
+    try:
+        with open('deployment-configs.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {'deployments': {}}
+    except Exception as e:
+        raise Exception(f"加载部署配置失败: {str(e)}")
 
 def generate_cloud_config(config_data: Dict[str, Any]) -> str:
     """根据JSON配置生成cloud-config YAML"""
     
-    # 获取启用的服务
-    enabled_services = []
-    if 'deployments' in config_data:
-        for service_name, service_config in config_data['deployments'].items():
-            if service_config.get('enabled', False):
-                enabled_services.append(service_name)
+    # 获取部署配置中的所有服务（所有传入的服务都认为是启用的）
+    enabled_services = list(config_data.get('deployments', {}).keys())
     
     # 构建cloud-config结构
     cloud_config = {
@@ -65,7 +70,7 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
 
 @app.route('/api/generate-config', methods=['POST'])
 def generate_config():
-    """接收JSON配置并生成config.yaml"""
+    """接收JSON配置并生成config.yaml内容"""
     try:
         # 获取JSON数据
         json_data = request.get_json()
@@ -75,29 +80,11 @@ def generate_config():
         # 生成cloud-config
         yaml_content = generate_cloud_config(json_data)
         
-        # 保存到文件
-        output_file = 'config.yaml'
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(yaml_content)
-        
         return jsonify({
             'success': True,
-            'message': f'配置文件已生成: {output_file}',
+            'message': '配置内容已生成',
             'content': yaml_content
         })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/download-config', methods=['GET'])
-def download_config():
-    """下载生成的config.yaml文件"""
-    try:
-        config_file = 'config.yaml'
-        if not os.path.exists(config_file):
-            return jsonify({'error': '配置文件不存在，请先生成配置'}), 404
-        
-        return send_file(config_file, as_attachment=True, download_name='config.yaml')
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -114,14 +101,35 @@ def index():
         'name': 'Cloud-Init Config Generator API',
         'version': '1.0.0',
         'endpoints': {
-            'POST /api/generate-config': '接收JSON配置并生成config.yaml',
-            'POST /api/deploy': '接收JSON配置，生成config.yaml并启动OpenStack实例',
-            'GET /api/download-config': '下载生成的config.yaml文件',
+            'POST /api/generate-config': '接收JSON配置并生成config.yaml内容',
+            'POST /api/deploy': '接收完整JSON配置并启动OpenStack实例',
+            'POST /api/deploy-services': '接收OpenStack配置并根据enable_*参数选择性部署服务（推荐）',
             'GET /api/instances': '列出所有OpenStack实例',
             'GET /api/instance/status/<name>': '获取指定实例的状态',
             'GET /api/health': '健康检查'
         },
-        'example_request': {
+        'example_request_deploy_services': {
+            'openstack': {
+                'instance_name': 'test',
+                'image': 'Ubuntu 22.04',
+                'flavor': 'p2',
+                'network': 'pku',
+                'key_name': 'Ethan'
+            },
+            'enable_docker': True,
+            'enable_nginx': True,
+            'enable_mysql': False,
+            'enable_nodejs': False
+        },
+        'available_services': ['docker', 'nginx', 'mysql', 'nodejs'],
+        'example_request_deploy': {
+            'openstack': {
+                'instance_name': 'test',
+                'image': 'Ubuntu 22.04',
+                'flavor': 'p2',
+                'network': 'pku',
+                'key_name': 'Ethan'
+            },
             'deployments': {
                 'docker': {
                     'enabled': True,
@@ -146,11 +154,8 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
             if field not in openstack_config:
                 raise ValueError(f"缺少必需的OpenStack配置字段: {field}")
         
-        # 生成cloud-config文件
+        # 生成cloud-config内容
         yaml_content = generate_cloud_config(config_data)
-        config_file = 'config.yaml'
-        with open(config_file, 'w', encoding='utf-8') as f:
-            f.write(yaml_content)
         
         # 构建OpenStack命令
         cmd = [
@@ -158,7 +163,7 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
             '--image', openstack_config['image'],
             '--flavor', openstack_config['flavor'],
             '--network', openstack_config['network'],
-            '--user-data', config_file,
+            '--user-data', '-',  # 从stdin读取user-data
             '--key-name', openstack_config['key_name']
         ]
         
@@ -173,14 +178,14 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
         # 实例名称
         cmd.append(openstack_config['instance_name'])
         
-        # 执行OpenStack命令
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        # 执行OpenStack命令，通过stdin传递user-data
+        result = subprocess.run(cmd, input=yaml_content, text=True, capture_output=True, check=True)
         
         return {
             'success': True,
             'message': f'实例 {openstack_config["instance_name"]} 创建成功',
             'output': result.stdout,
-            'config_file': config_file
+            'user_data': yaml_content
         }
         
     except subprocess.CalledProcessError as e:
@@ -195,9 +200,50 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
             'error': str(e)
         }
 
+@app.route('/api/deploy-services', methods=['POST'])
+def deploy_with_services():
+    """接收OpenStack配置并根据enable_*参数选择性部署服务"""
+    try:
+        # 获取请求中的配置
+        request_data = request.get_json()
+        if not request_data:
+            return jsonify({'error': '未提供JSON数据'}), 400
+        
+        # 检查OpenStack配置
+        if 'openstack' not in request_data:
+            return jsonify({'error': '缺少OpenStack配置'}), 400
+        
+        # 从本地文件加载服务配置
+        deployment_configs = load_deployment_configs()
+        
+        # 根据请求中的 enable_* 参数启用相应服务
+        enabled_services = {}
+        for service_name, service_config in deployment_configs.get('deployments', {}).items():
+            enable_key = f'enable_{service_name}'
+            if request_data.get(enable_key, False):
+                # 直接复制服务配置，不需要设置 enabled 字段
+                enabled_services[service_name] = service_config.copy()
+        
+        # 合并 OpenStack 配置和启用的服务配置
+        final_config = {
+            'openstack': request_data['openstack'],
+            'deployments': enabled_services
+        }
+        
+        # 部署到OpenStack
+        result = deploy_to_openstack(final_config)
+        
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/deploy', methods=['POST'])
 def deploy_instance():
-    """接收JSON配置，生成config.yaml并启动OpenStack实例"""
+    """接收JSON配置并启动OpenStack实例"""
     try:
         # 获取JSON数据
         json_data = request.get_json()
