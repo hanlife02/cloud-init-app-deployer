@@ -3,7 +3,6 @@
     "docker": {
       "version": "latest",
       "registry_mirror": "https://mirrors.pku.edu.cn/docker-ce/linux/ubuntu",
-      "test_container": false,
       "packages": [
         "apt-transport-https",
         "ca-certificates",
@@ -19,10 +18,8 @@
         "apt-get install -y docker-ce docker-ce-cli containerd.io",
         "systemctl enable docker",
         "systemctl start docker",
+        "usermod -aG docker ubuntu",
         "docker --version > /root/docker-version.txt"
-      ],
-      "test_commands": [
-        "docker run --rm hello-world > /root/docker-test.txt"
       ]
     },
     "nginx": {
