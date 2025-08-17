@@ -19,6 +19,40 @@ def load_deployment_configs() -> Dict[str, Any]:
     except Exception as e:
         raise Exception(f"加载部署配置失败: {str(e)}")
 
+def load_docker_install_configs() -> Dict[str, Any]:
+    """加载Docker安装配置"""
+    try:
+        with open('deployment-configs.json', 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            return {
+                'docker_install_configs': config.get('docker_install_configs', {}),
+                'image_mapping': config.get('image_mapping', {})
+            }
+    except FileNotFoundError:
+        raise Exception("部署配置文件不存在")
+    except Exception as e:
+        raise Exception(f"加载Docker安装配置失败: {str(e)}")
+
+def get_docker_config_for_image(image_name: str) -> Dict[str, Any]:
+    """根据镜像名称获取对应的Docker安装配置"""
+    docker_configs = load_docker_install_configs()
+    
+    # 查找镜像映射
+    os_type = None
+    for img_pattern, os_name in docker_configs['image_mapping'].items():
+        if img_pattern.lower() in image_name.lower():
+            os_type = os_name
+            break
+    
+    if not os_type:
+        # 默认使用Ubuntu配置
+        os_type = 'ubuntu'
+    
+    if os_type not in docker_configs['docker_install_configs']:
+        raise Exception(f"不支持的操作系统类型: {os_type}")
+    
+    return docker_configs['docker_install_configs'][os_type]
+
 def generate_cloud_config(config_data: Dict[str, Any]) -> str:
     """根据JSON配置生成cloud-config YAML"""
     
@@ -39,8 +73,21 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
     packages = set()
     commands = []
     
+    # 获取镜像信息用于Docker配置选择
+    image_name = config_data.get('openstack', {}).get('image', 'Ubuntu 22.04')
+    
     for service in enabled_services:
-        service_config = config_data['deployments'][service]
+        service_config = config_data['deployments'][service].copy()
+        
+        # 如果是Docker服务，根据镜像类型动态选择配置
+        if service == 'docker':
+            try:
+                docker_config = get_docker_config_for_image(image_name)
+                service_config['packages'] = docker_config['packages']
+                service_config['commands'] = docker_config['commands']
+            except Exception as e:
+                # 如果获取Docker配置失败，使用默认配置
+                print(f"获取Docker配置失败，使用默认配置: {str(e)}")
         
         # 添加包
         if 'packages' in service_config:
