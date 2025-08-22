@@ -67,10 +67,7 @@ curl -X POST http://localhost:5000/api/generate-config \
       "image": "Ubuntu 22.04"
     },
     "deployments": {
-      "docker": {
-        "packages": ["docker.io"],
-        "commands": ["systemctl enable docker", "systemctl start docker"]
-      }
+      "docker": {}
     }
   }'
 
@@ -82,17 +79,21 @@ curl -X POST "http://localhost:5000/api/generate-config?save=true" \
       "image": "Ubuntu 22.04"
     },
     "deployments": {
-      "docker": {
-        "packages": ["docker.io"],
-        "commands": ["systemctl enable docker", "systemctl start docker"]
-      }
+      "docker": {}
     }
   }'
 
 # 自定义文件名保存
 curl -X POST "http://localhost:5000/api/generate-config?save=true&filename=my-config.yaml" \
   -H "Content-Type: application/json" \
-  -d '{...}'
+  -d '{
+    "openstack": {
+      "image": "Ubuntu 22.04"
+    },
+    "deployments": {
+      "docker": {}
+    }
+  }'
 ```
 
 ## 可用服务
