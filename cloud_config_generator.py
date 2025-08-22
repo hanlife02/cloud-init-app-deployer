@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
-"""Cloud-config生成器模块"""
-
 import yaml
 from typing import Dict, Any
 from config_manager import get_docker_config_for_image
 
 
 def generate_cloud_config(config_data: Dict[str, Any]) -> str:
-    """根据JSON配置生成cloud-config YAML"""
-    
     enabled_services = list(config_data.get('deployments', {}).keys())
     
     cloud_config = {

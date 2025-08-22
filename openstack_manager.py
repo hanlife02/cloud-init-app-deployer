@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""OpenStack操作模块"""
-
 import subprocess
 import tempfile
 import os
@@ -10,7 +7,6 @@ from cloud_config_generator import generate_cloud_config
 
 
 def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
-    """部署实例到OpenStack"""
     try:
         if 'openstack' not in config_data:
             raise ValueError("缺少OpenStack配置")
@@ -74,7 +70,6 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_instance_status(instance_name: str) -> Dict[str, Any]:
-    """获取OpenStack实例状态"""
     try:
         cmd = ['openstack', 'server', 'show', instance_name, '--format', 'json']
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -106,7 +101,6 @@ def get_instance_status(instance_name: str) -> Dict[str, Any]:
 
 
 def list_instances() -> Dict[str, Any]:
-    """列出所有OpenStack实例"""
     try:
         cmd = ['openstack', 'server', 'list', '--format', 'json']
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)

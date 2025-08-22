@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""API路由模块"""
-
 from flask import jsonify, request
 import yaml
 from config_manager import load_deployment_configs
@@ -9,11 +6,9 @@ from openstack_manager import deploy_to_openstack, get_instance_status, list_ins
 
 
 def register_routes(app):
-    """注册所有API路由"""
     
     @app.route('/api/generate-config', methods=['POST'])
     def generate_config():
-        """接收JSON配置并生成config.yaml内容"""
         try:
             json_data = request.get_json()
             if not json_data:
@@ -32,7 +27,6 @@ def register_routes(app):
 
     @app.route('/api/json-to-yaml', methods=['POST'])
     def json_to_yaml():
-        """将JSON数据转换为YAML格式"""
         try:
             json_data = request.get_json()
             if not json_data:
@@ -51,12 +45,10 @@ def register_routes(app):
 
     @app.route('/api/health', methods=['GET'])
     def health_check():
-        """健康检查接口"""
         return jsonify({'status': 'healthy', 'message': 'Cloud-Init Config Generator API is running'})
 
     @app.route('/', methods=['GET'])
     def index():
-        """API文档"""
         return jsonify({
             'name': 'Cloud-Init Config Generator API',
             'version': '1.0.0',
@@ -103,7 +95,6 @@ def register_routes(app):
 
     @app.route('/api/deploy-services', methods=['POST'])
     def deploy_with_services():
-        """接收OpenStack配置并根据enable_*参数选择性部署服务"""
         try:
             request_data = request.get_json()
             if not request_data:
@@ -137,7 +128,6 @@ def register_routes(app):
 
     @app.route('/api/deploy', methods=['POST'])
     def deploy_instance():
-        """接收JSON配置并启动OpenStack实例"""
         try:
             json_data = request.get_json()
             if not json_data:
@@ -155,7 +145,6 @@ def register_routes(app):
 
     @app.route('/api/instance/status/<instance_name>', methods=['GET'])
     def instance_status(instance_name):
-        """获取OpenStack实例状态"""
         try:
             result = get_instance_status(instance_name)
             
@@ -169,7 +158,6 @@ def register_routes(app):
 
     @app.route('/api/instances', methods=['GET'])
     def instances():
-        """列出所有OpenStack实例"""
         try:
             result = list_instances()
             
