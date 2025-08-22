@@ -1,5 +1,6 @@
 from flask import jsonify, request
 import yaml
+import os
 from config_manager import load_deployment_configs
 from cloud_config_generator import generate_cloud_config
 from openstack_manager import deploy_to_openstack, get_instance_status, list_instances
@@ -16,32 +17,34 @@ def register_routes(app):
             
             yaml_content = generate_cloud_config(json_data)
             
-            return jsonify({
+            # 检查是否需要保存文件
+            save_file = request.args.get('save', 'false').lower() == 'true'
+            filename = request.args.get('filename', 'config.yaml')
+            
+            result = {
                 'success': True,
                 'message': '配置内容已生成',
                 'content': yaml_content
-            })
+            }
+            
+            if save_file:
+                # 确保outputs目录存在
+                output_dir = 'outputs'
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                
+                file_path = os.path.join(output_dir, filename)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(yaml_content)
+                
+                result['message'] = f'cloud-init配置已生成并保存到 {file_path}'
+                result['file_path'] = file_path
+            
+            return jsonify(result)
             
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
-    @app.route('/api/json-to-yaml', methods=['POST'])
-    def json_to_yaml():
-        try:
-            json_data = request.get_json()
-            if not json_data:
-                return jsonify({'error': '未提供JSON数据'}), 400
-            
-            yaml_content = yaml.dump(json_data, default_flow_style=False, allow_unicode=True, indent=2)
-            
-            return jsonify({
-                'success': True,
-                'message': 'JSON已成功转换为YAML',
-                'yaml_content': yaml_content
-            })
-            
-        except Exception as e:
-            return jsonify({'error': f'转换失败: {str(e)}'}), 500
 
     @app.route('/api/health', methods=['GET'])
     def health_check():
@@ -54,7 +57,6 @@ def register_routes(app):
             'version': '1.0.0',
             'endpoints': {
                 'POST /api/generate-config': '接收JSON配置并生成config.yaml内容',
-                'POST /api/json-to-yaml': '将JSON数据转换为YAML格式',
                 'POST /api/deploy': '接收完整JSON配置并启动OpenStack实例',
                 'POST /api/deploy-services': '接收OpenStack配置并根据enable_*参数选择性部署服务（推荐）',
                 'GET /api/instances': '列出所有OpenStack实例',

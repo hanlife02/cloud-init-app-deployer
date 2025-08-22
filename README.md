@@ -2,7 +2,7 @@
  * @Author: Ethan yanghan0911@gmail.com
  * @Date: 2025-08-07 20:39:14
  * @LastEditors: Ethan yanghan0911@gmail.com
- * @LastEditTime: 2025-08-12 21:53:13
+ * @LastEditTime: 2025-08-22 19:49:28
  * @FilePath: /Cloud-Init-App-Deployer/README.md
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 -->
@@ -31,9 +31,6 @@ curl -X POST http://localhost:5000/api/deploy-services \
       "key_name": "Ethan"
     },
     "enable_docker": true,
-    "enable_nginx": false,
-    "enable_mysql": false,
-    "enable_nodejs": false
   }'
 ```
 
@@ -42,17 +39,42 @@ curl -X POST http://localhost:5000/api/deploy-services \
 curl http://localhost:5000/api/instances
 ```
 
-## API接口
+### 配置生成接口使用示例
 
-- `POST /api/deploy-services` - 接收OpenStack配置并根据enable_*参数选择性部署服务（推荐）
-- `POST /api/deploy` - 接收完整JSON配置并启动实例（自定义方式）
-- `POST /api/generate-config` - 仅生成配置文件
-- `GET /api/instances` - 列出实例
-- `GET /api/instance/status/<name>` - 实例状态
+#### 生成config.yaml配置
+```bash
+# 生成配置内容（仅返回内容，不生成文件）
+curl -X POST http://localhost:5000/api/generate-config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "openstack": {
+      "image": "Ubuntu 22.04"
+    },
+    "deployments": {
+      "docker": {
+        "packages": ["docker.io"],
+        "commands": ["systemctl enable docker", "systemctl start docker"]
+      }
+    }
+  }'
 
-## 可用服务
+# 生成配置并保存到文件
+curl -X POST "http://localhost:5000/api/generate-config?save=true" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "openstack": {
+      "image": "Ubuntu 22.04"
+    },
+    "deployments": {
+      "docker": {
+        "packages": ["docker.io"],
+        "commands": ["systemctl enable docker", "systemctl start docker"]
+      }
+    }
+  }'
 
-- `docker` - Docker 容器引擎
-- `nginx` - Web 服务器
-- `mysql` - 数据库服务
-- `nodejs` - Node.js 运行时
+# 自定义文件名保存
+curl -X POST "http://localhost:5000/api/generate-config?save=true&filename=my-config.yaml" \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+```

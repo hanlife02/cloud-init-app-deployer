@@ -85,36 +85,6 @@
   "deployments": {
     "docker": {
       "version": "latest"
-    },
-    "nginx": {
-      "packages": [
-        "nginx"
-      ],
-      "commands": [
-        "systemctl enable nginx",
-        "systemctl start nginx",
-        "nginx -v > /root/nginx-version.txt"
-      ]
-    },
-    "mysql": {
-      "packages": [
-        "mysql-server"
-      ],
-      "commands": [
-        "systemctl enable mysql",
-        "systemctl start mysql",
-        "mysql --version > /root/mysql-version.txt"
-      ]
-    },
-    "nodejs": {
-      "packages": [
-        "nodejs",
-        "npm"
-      ],
-      "commands": [
-        "node --version > /root/node-version.txt",
-        "npm --version > /root/npm-version.txt"
-      ]
     }
   }
 }
