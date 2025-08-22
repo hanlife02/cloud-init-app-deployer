@@ -1,9 +1,11 @@
 import yaml
 from typing import Dict, Any
-from config_manager import get_docker_config_for_image
+from config_manager import get_docker_config_for_image, load_deployment_configs
 
 
 def generate_cloud_config(config_data: Dict[str, Any]) -> str:
+    deployment_configs = load_deployment_configs()
+    
     enabled_services = list(config_data.get('deployments', {}).keys())
     
     cloud_config = {
@@ -30,6 +32,19 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
                 service_config['commands'] = docker_config['commands']
             except Exception as e:
                 print(f"获取Docker配置失败，使用默认配置: {str(e)}")
+                if 'deployments' in deployment_configs and 'docker' in deployment_configs['deployments']:
+                    default_docker = deployment_configs['deployments']['docker']
+                    if 'packages' not in service_config and 'packages' in default_docker:
+                        service_config['packages'] = default_docker['packages']
+                    if 'commands' not in service_config and 'commands' in default_docker:
+                        service_config['commands'] = default_docker['commands']
+        else:
+            if 'deployments' in deployment_configs and service in deployment_configs['deployments']:
+                default_service = deployment_configs['deployments'][service]
+                if 'packages' not in service_config and 'packages' in default_service:
+                    service_config['packages'] = default_service['packages']
+                if 'commands' not in service_config and 'commands' in default_service:
+                    service_config['commands'] = default_service['commands']
         
         if 'packages' in service_config:
             packages.update(service_config['packages'])

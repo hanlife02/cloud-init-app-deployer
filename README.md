@@ -10,6 +10,22 @@
 
 基于Flask的API服务，接收JSON配置生成Cloud-Init内容并直接启动OpenStack实例。
 
+## 文件结构
+
+```
+Cloud-Init-App-Deployer/
+├── README.md                   # 项目文档
+├── requirements.txt            # Python依赖包
+├── app.py                     # Flask应用主入口
+├── api_routes.py              # API路由定义
+├── cloud_config_generator.py   # Cloud-Init配置生成器
+├── config_manager.py          # 配置管理器
+├── openstack_manager.py       # OpenStack实例管理
+├── deployment-configs.json    # 部署配置文件（Docker安装配置）
+└── outputs/                   # 生成的配置文件目录（自动创建）
+    └── config.yaml           # 生成的Cloud-Init配置文件
+```
+
 ## 使用方法
 
 ### 1. 启动服务
@@ -78,3 +94,14 @@ curl -X POST "http://localhost:5000/api/generate-config?save=true&filename=my-co
   -H "Content-Type: application/json" \
   -d '{...}'
 ```
+
+## 可用服务
+
+- `docker` - Docker 容器引擎（支持 Ubuntu、CentOS、Debian 系统的智能安装）
+
+## 核心特性
+
+- **智能Docker安装**: 根据不同操作系统自动选择合适的Docker CE安装方式
+- **配置文件生成**: 生成符合cloud-init规范的YAML配置文件  
+- **OpenStack集成**: 直接部署到OpenStack环境
+- **文件保存**: 支持将生成的配置保存为本地文件
