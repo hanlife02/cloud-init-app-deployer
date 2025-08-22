@@ -2,7 +2,7 @@
  * @Author: Ethan yanghan0911@gmail.com
  * @Date: 2025-08-07 20:39:14
  * @LastEditors: Ethan yanghan0911@gmail.com
- * @LastEditTime: 2025-08-22 19:49:28
+ * @LastEditTime: 2025-08-22 20:18:31
  * @FilePath: /Cloud-Init-App-Deployer/README.md
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 -->
@@ -99,10 +99,3 @@ curl -X POST "http://localhost:5000/api/generate-config?save=true&filename=my-co
 ## 可用服务
 
 - `docker` - Docker 容器引擎（支持 Ubuntu、CentOS、Debian 系统的智能安装）
-
-## 核心特性
-
-- **智能Docker安装**: 根据不同操作系统自动选择合适的Docker CE安装方式
-- **配置文件生成**: 生成符合cloud-init规范的YAML配置文件  
-- **OpenStack集成**: 直接部署到OpenStack环境
-- **文件保存**: 支持将生成的配置保存为本地文件
