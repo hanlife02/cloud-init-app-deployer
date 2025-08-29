@@ -2,8 +2,28 @@ import subprocess
 import tempfile
 import os
 import json
+import logging
+from contextlib import contextmanager
 from typing import Dict, Any
 from cloud_config_generator import generate_cloud_config
+
+logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def temp_yaml_file(content: str):
+    """上下文管理器用于处理临时YAML文件"""
+    temp_file = None
+    try:
+        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
+        temp_file.write(content)
+        temp_file.flush()
+        yield temp_file.name
+    finally:
+        if temp_file:
+            temp_file.close()
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
 
 
 def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -18,13 +38,11 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
             if field not in openstack_config:
                 raise ValueError(f"缺少必需的OpenStack配置字段: {field}")
         
+        logger.info(f"开始部署实例: {openstack_config['instance_name']}")
+        
         yaml_content = generate_cloud_config(config_data)
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
-            temp_file.write(yaml_content)
-            temp_file_path = temp_file.name
-        
-        try:
+        with temp_yaml_file(yaml_content) as temp_file_path:
             cmd = [
                 'openstack', 'server', 'create',
                 '--image', openstack_config['image'],
@@ -43,7 +61,11 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
 
             cmd.append(openstack_config['instance_name'])
             
+            logger.info(f"OpenStack命令: {' '.join(cmd[:3])} ... {openstack_config['instance_name']}")
+            
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            logger.info(f"实例 {openstack_config['instance_name']} 创建成功")
             
             return {
                 'success': True,
@@ -52,25 +74,27 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
                 'user_data': yaml_content
             }
         
-        finally:
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-        
     except subprocess.CalledProcessError as e:
+        error_msg = f'OpenStack命令执行失败: {e.stderr}'
+        logger.error(error_msg)
         return {
             'success': False,
-            'error': f'OpenStack命令执行失败: {e.stderr}',
+            'error': error_msg,
             'returncode': e.returncode
         }
     except Exception as e:
+        error_msg = str(e)
+        logger.error(f'部署失败: {error_msg}')
         return {
             'success': False,
-            'error': str(e)
+            'error': error_msg
         }
 
 
 def get_instance_status(instance_name: str) -> Dict[str, Any]:
     try:
+        logger.info(f"查询实例状态: {instance_name}")
+        
         cmd = ['openstack', 'server', 'show', instance_name, '--format', 'json']
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         
@@ -89,19 +113,32 @@ def get_instance_status(instance_name: str) -> Dict[str, Any]:
         }
         
     except subprocess.CalledProcessError as e:
+        error_msg = f'无法获取实例状态: {e.stderr}'
+        logger.error(error_msg)
         return {
             'success': False,
-            'error': f'无法获取实例状态: {e.stderr}'
+            'error': error_msg
+        }
+    except json.JSONDecodeError as e:
+        error_msg = f'JSON解析错误: {str(e)}'
+        logger.error(error_msg)
+        return {
+            'success': False,
+            'error': error_msg
         }
     except Exception as e:
+        error_msg = str(e)
+        logger.error(f'获取实例状态失败: {error_msg}')
         return {
             'success': False,
-            'error': str(e)
+            'error': error_msg
         }
 
 
 def list_instances() -> Dict[str, Any]:
     try:
+        logger.info("查询所有实例列表")
+        
         cmd = ['openstack', 'server', 'list', '--format', 'json']
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         
@@ -113,12 +150,23 @@ def list_instances() -> Dict[str, Any]:
         }
         
     except subprocess.CalledProcessError as e:
+        error_msg = f'无法获取实例列表: {e.stderr}'
+        logger.error(error_msg)
         return {
             'success': False,
-            'error': f'无法获取实例列表: {e.stderr}'
+            'error': error_msg
+        }
+    except json.JSONDecodeError as e:
+        error_msg = f'JSON解析错误: {str(e)}'
+        logger.error(error_msg)
+        return {
+            'success': False,
+            'error': error_msg
         }
     except Exception as e:
+        error_msg = str(e)
+        logger.error(f'获取实例列表失败: {error_msg}')
         return {
             'success': False,
-            'error': str(e)
+            'error': error_msg
         }
