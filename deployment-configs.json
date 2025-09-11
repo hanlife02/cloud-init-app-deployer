@@ -85,6 +85,37 @@
   "deployments": {
     "docker": {
       "version": "latest"
+    },
+    "lobechat": {
+      "version": "latest",
+      "database_type": "client",
+      "packages": ["docker-compose"],
+      "commands": [
+        "mkdir -p /opt/lobechat",
+        "cd /opt/lobechat"
+      ],
+      "environment": {
+        "OPENAI_API_KEY": "sk-xxxx",
+        "OPENAI_PROXY_URL": "https://api-proxy.com/v1",
+        "ACCESS_CODE": "lobe66"
+      },
+      "docker_compose": {
+        "version": "3.8",
+        "services": {
+          "lobe-chat": {
+            "image": "lobehub/lobe-chat",
+            "container_name": "lobe-chat",
+            "restart": "always",
+            "ports": ["3210:3210"],
+            "environment": {
+              "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+              "OPENAI_PROXY_URL": "${OPENAI_PROXY_URL}",
+              "ACCESS_CODE": "${ACCESS_CODE}"
+            }
+          }
+        }
+      },
+      "auto_update_script": "#!/bin/bash\n# auto-update-lobe-chat.sh\n\n# Set proxy (optional)\nexport https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890\n\n# Pull the latest image and store the output in a variable\noutput=$(docker pull lobehub/lobe-chat:latest 2>&1)\n\n# Check if the pull command was executed successfully\nif [ $? -ne 0 ]; then\n  exit 1\nfi\n\n# Check if the output contains a specific string\necho \"$output\" | grep -q \"Image is up to date for lobehub/lobe-chat:latest\"\n\n# If the image is already up to date, do nothing\nif [ $? -eq 0 ]; then\n  exit 0\nfi\n\necho \"Detected Lobe-Chat update\"\n\n# Remove the old container\necho \"Removed: $(docker rm -f lobe-chat)\"\n\n# You may need to navigate to the directory where `docker-compose.yml` is located first\ncd /opt/lobechat\n\n# Run the new container\necho \"Started: $(docker-compose up -d)\"\n\n# Print the update time and version\necho \"Update time: $(date)\"\necho \"Version: $(docker inspect lobehub/lobe-chat:latest | grep 'org.opencontainers.image.version' | awk -F'\"' '{print $4}')\"\n\n# Clean up unused images\ndocker images | grep 'lobehub/lobe-chat' | grep -v 'lobehub/lobe-chat-database' | grep -v 'latest' | awk '{print $3}' | xargs -r docker rmi > /dev/null 2>&1\necho \"Removed old images.\""
     }
   }
 }

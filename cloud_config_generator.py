@@ -1,9 +1,50 @@
 import yaml
 import logging
+import json
 from typing import Dict, Any
 from config_manager import get_docker_config_for_image, load_deployment_configs
 
 logger = logging.getLogger(__name__)
+
+
+def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
+    """为LobeChat生成docker-compose文件和自动更新脚本"""
+    files_commands = []
+    
+    # 生成docker-compose.yml文件
+    docker_compose_content = {
+        'version': service_config['docker_compose']['version'],
+        'services': service_config['docker_compose']['services'].copy()
+    }
+    
+    # 替换环境变量
+    for service_name, service in docker_compose_content['services'].items():
+        if 'environment' in service:
+            for env_key, env_value in service['environment'].items():
+                if env_value.startswith('${') and env_value.endswith('}'):
+                    var_name = env_value[2:-1]  # 移除 ${ 和 }
+                    if var_name in service_config['environment']:
+                        service['environment'][env_key] = service_config['environment'][var_name]
+    
+    docker_compose_yaml = yaml.dump(docker_compose_content, default_flow_style=False, allow_unicode=True, indent=2)
+    
+    # 写入docker-compose.yml文件
+    files_commands.append(f"cat > /opt/lobechat/docker-compose.yml << 'EOF'")
+    files_commands.append(docker_compose_yaml.strip())
+    files_commands.append("EOF")
+    
+    # 生成自动更新脚本
+    update_script = service_config.get('auto_update_script', '')
+    if update_script:
+        files_commands.append(f"cat > /opt/lobechat/auto-update-lobe-chat.sh << 'EOF'")
+        files_commands.append(update_script)
+        files_commands.append("EOF")
+        files_commands.append("chmod +x /opt/lobechat/auto-update-lobe-chat.sh")
+        
+        # 添加到crontab
+        files_commands.append("(crontab -l 2>/dev/null; echo '0 2 * * * /opt/lobechat/auto-update-lobe-chat.sh >> /var/log/lobe-chat-update.log 2>&1') | crontab -")
+    
+    return files_commands
 
 
 def generate_cloud_config(config_data: Dict[str, Any]) -> str:
@@ -60,6 +101,33 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
             commands.append(f'# {service} 配置')
             if 'commands' in service_config:
                 commands.extend(service_config['commands'])
+            
+            # 特殊处理LobeChat部署
+            if service == 'lobechat':
+                # 首先检查并安装Docker
+                if 'docker' not in enabled_services:
+                    logger.info("LobeChat需要Docker，自动添加Docker安装步骤")
+                    try:
+                        docker_config = get_docker_config_for_image(image_name)
+                        packages.update(docker_config['packages'])
+                        commands.append('# Docker 自动配置')
+                        commands.extend(docker_config['commands'])
+                    except Exception as e:
+                        logger.warning(f"获取Docker配置失败: {str(e)}")
+                        commands.extend([
+                            'apt-get install -y docker.io',
+                            'systemctl enable docker',
+                            'systemctl start docker',
+                            'usermod -aG docker ubuntu'
+                        ])
+                
+                # 生成LobeChat特定的文件和配置
+                lobechat_files = generate_lobechat_files(service_config)
+                commands.extend(lobechat_files)
+                
+                # 启动LobeChat服务
+                commands.append('cd /opt/lobechat && docker-compose up -d')
+                logger.info("已添加LobeChat部署和自动更新配置")
             
             if service_config.get('test_container', False) and 'test_commands' in service_config:
                 commands.extend(service_config['test_commands'])
