@@ -106,7 +106,7 @@
             "image": "lobehub/lobe-chat",
             "container_name": "lobe-chat",
             "restart": "always",
-            "ports": ["3210:3210"],
+            "ports": ["0.0.0.0:3210:3210"],
             "environment": {
               "OPENAI_API_KEY": "${OPENAI_API_KEY}",
               "OPENAI_PROXY_URL": "${OPENAI_PROXY_URL}",
