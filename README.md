@@ -36,7 +36,7 @@ python3 app.py
 
 ### 2. 部署实例（推荐方式）
 
-#### Docker服务部署
+#### 部署 Docker 和 LobeChat
 ```bash
 curl -X POST http://localhost:5000/api/deploy-services \
   -H "Content-Type: application/json" \
@@ -48,25 +48,12 @@ curl -X POST http://localhost:5000/api/deploy-services \
       "network": "pku",
       "key_name": "Ethan"
     },
-    "enable_docker": true
-  }'
-```
-
-#### LobeChat部署
-```bash
-curl -X POST http://localhost:5000/api/deploy-services \
-  -H "Content-Type: application/json" \
-  -d '{
-    "openstack": {
-      "instance_name": "test",
-      "image": "Ubuntu 22.04",
-      "flavor": "p2",
-      "network": "pku",
-      "key_name": "Ethan"
-    },
+    "enable_docker": true,
     "enable_lobechat": true
   }'
 ```
+
+> 注意：`enable_docker` 和 `enable_lobechat` 参数可以设置为 `true` 或 `false`，可以灵活组合使用。
 
 ### 3. 查看实例
 ```bash
