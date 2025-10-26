@@ -1,10 +1,20 @@
-import yaml
+import copy
 import logging
-import json
 from typing import Dict, Any
+import yaml
 from config_manager import get_docker_config_for_image, load_deployment_configs
 
 logger = logging.getLogger(__name__)
+
+
+def _render_heredoc(target_path: str, content: str) -> str:
+    """将多行内容写入目标文件的shell命令"""
+    body = content.rstrip('\n')
+    return "\n".join([
+        f"cat <<'EOF' > {target_path}",
+        body,
+        "EOF"
+    ])
 
 
 def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
@@ -14,7 +24,7 @@ def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
     # 生成docker-compose.yml文件
     docker_compose_content = {
         'version': service_config['docker_compose']['version'],
-        'services': service_config['docker_compose']['services'].copy()
+        'services': copy.deepcopy(service_config['docker_compose']['services'])
     }
     
     # 替换环境变量
@@ -23,22 +33,18 @@ def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
             for env_key, env_value in service['environment'].items():
                 if env_value.startswith('${') and env_value.endswith('}'):
                     var_name = env_value[2:-1]  # 移除 ${ 和 }
-                    if var_name in service_config['environment']:
+                    if 'environment' in service_config and var_name in service_config['environment']:
                         service['environment'][env_key] = service_config['environment'][var_name]
     
     docker_compose_yaml = yaml.dump(docker_compose_content, default_flow_style=False, allow_unicode=True, indent=2)
     
-    # 写入docker-compose.yml文件
-    files_commands.append(f"cat > /opt/lobechat/docker-compose.yml << 'EOF'")
-    files_commands.append(docker_compose_yaml.strip())
-    files_commands.append("EOF")
+    files_commands.append("mkdir -p /opt/lobechat")
+    files_commands.append(_render_heredoc("/opt/lobechat/docker-compose.yml", docker_compose_yaml))
     
     # 生成自动更新脚本
     update_script = service_config.get('auto_update_script', '')
     if update_script:
-        files_commands.append(f"cat > /opt/lobechat/auto-update-lobe-chat.sh << 'EOF'")
-        files_commands.append(update_script)
-        files_commands.append("EOF")
+        files_commands.append(_render_heredoc("/opt/lobechat/auto-update-lobe-chat.sh", update_script))
         files_commands.append("chmod +x /opt/lobechat/auto-update-lobe-chat.sh")
         
         # 添加到crontab
@@ -71,7 +77,7 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
         
         for service in enabled_services:
             logger.info(f"处理服务: {service}")
-            service_config = config_data['deployments'][service].copy()
+            service_config = copy.deepcopy(config_data['deployments'][service])
             
             if service == 'docker':
                 try:
@@ -82,14 +88,14 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
                 except Exception as e:
                     logger.warning(f"获取Docker配置失败，使用默认配置: {str(e)}")
                     if 'deployments' in deployment_configs and 'docker' in deployment_configs['deployments']:
-                        default_docker = deployment_configs['deployments']['docker']
+                        default_docker = copy.deepcopy(deployment_configs['deployments']['docker'])
                         if 'packages' not in service_config and 'packages' in default_docker:
                             service_config['packages'] = default_docker['packages']
                         if 'commands' not in service_config and 'commands' in default_docker:
                             service_config['commands'] = default_docker['commands']
             else:
                 if 'deployments' in deployment_configs and service in deployment_configs['deployments']:
-                    default_service = deployment_configs['deployments'][service]
+                    default_service = copy.deepcopy(deployment_configs['deployments'][service])
                     if 'packages' not in service_config and 'packages' in default_service:
                         service_config['packages'] = default_service['packages']
                     if 'commands' not in service_config and 'commands' in default_service:

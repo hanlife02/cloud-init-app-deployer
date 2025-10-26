@@ -70,8 +70,7 @@ def deploy_to_openstack(config_data: Dict[str, Any]) -> Dict[str, Any]:
             return {
                 'success': True,
                 'message': f'实例 {openstack_config["instance_name"]} 创建成功',
-                'output': result.stdout,
-                'user_data': yaml_content
+                'output': result.stdout
             }
         
     except subprocess.CalledProcessError as e:

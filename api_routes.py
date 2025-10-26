@@ -1,7 +1,9 @@
-from flask import jsonify, request
-import yaml
+import copy
 import os
 import logging
+from functools import wraps
+from flask import jsonify, request
+from werkzeug.utils import secure_filename
 from config_manager import load_deployment_configs
 from cloud_config_generator import generate_cloud_config
 from openstack_manager import deploy_to_openstack, get_instance_status, list_instances
@@ -18,22 +20,48 @@ def validate_openstack_config(config):
     return True
 
 
-def handle_api_error(error, status_code=500):
+def handle_api_error(error, status_code=500, expose_message=False):
     """统一的API错误处理"""
-    logger.error(f'API错误: {str(error)}')
-    return jsonify({'error': str(error)}), status_code
+    if isinstance(error, Exception):
+        if status_code >= 500:
+            logger.exception('API错误')
+        else:
+            logger.warning('API请求错误: %s', error)
+        message = str(error) if expose_message else '服务器内部错误'
+    else:
+        message = str(error)
+    return jsonify({'error': message}), status_code
+
+
+def require_api_token(fn):
+    """简单的基于令牌的认证"""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        expected_token = os.getenv('API_TOKEN')
+        if not expected_token:
+            logger.error('API_TOKEN环境变量未设置，拒绝请求')
+            return handle_api_error('服务未正确配置身份验证', 503, expose_message=True)
+
+        provided_token = request.headers.get('X-API-Key')
+        if not provided_token or provided_token != expected_token:
+            return handle_api_error('未授权访问', 401, expose_message=True)
+        return fn(*args, **kwargs)
+    return wrapper
 
 
 def register_routes(app):
     
     @app.route('/api/generate-config', methods=['POST'])
+    @require_api_token
     def generate_config():
         try:
             json_data = request.get_json()
             if not json_data:
                 return handle_api_error('未提供JSON数据', 400)
+            if not isinstance(json_data, dict):
+                return handle_api_error('JSON格式无效，必须是对象', 400)
             
-            logger.info(f'生成配置请求: {json_data.keys()}')
+            logger.info(f"生成配置请求: {list(json_data.keys())}")
             
             yaml_content = generate_cloud_config(json_data)
             
@@ -49,8 +77,16 @@ def register_routes(app):
             if save_file:
                 output_dir = 'outputs'
                 os.makedirs(output_dir, exist_ok=True)
-                
-                file_path = os.path.join(output_dir, filename)
+
+                sanitized_name = secure_filename(filename)
+                if not sanitized_name:
+                    return handle_api_error('文件名无效', 400)
+                output_dir_path = os.path.abspath(output_dir)
+                if not sanitized_name.lower().endswith(('.yaml', '.yml')):
+                    sanitized_name = f"{sanitized_name}.yaml"
+                file_path = os.path.join(output_dir_path, sanitized_name)
+                if not file_path.startswith(output_dir_path + os.sep):
+                    return handle_api_error('文件保存路径无效', 400)
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(yaml_content)
                 
@@ -60,6 +96,8 @@ def register_routes(app):
             
             return jsonify(result)
             
+        except ValueError as e:
+            return handle_api_error(e, 400, expose_message=True)
         except Exception as e:
             return handle_api_error(e)
 
@@ -115,11 +153,14 @@ def register_routes(app):
         })
 
     @app.route('/api/deploy-services', methods=['POST'])
+    @require_api_token
     def deploy_with_services():
         try:
             request_data = request.get_json()
             if not request_data:
                 return handle_api_error('未提供JSON数据', 400)
+            if not isinstance(request_data, dict):
+                return handle_api_error('JSON格式无效，必须是对象', 400)
             
             if 'openstack' not in request_data:
                 return handle_api_error('缺少OpenStack配置', 400)
@@ -134,7 +175,7 @@ def register_routes(app):
             for service_name, service_config in deployment_configs.get('deployments', {}).items():
                 enable_key = f'enable_{service_name}'
                 if request_data.get(enable_key, False):
-                    enabled_services[service_name] = service_config.copy()
+                    enabled_services[service_name] = copy.deepcopy(service_config)
                     logger.info(f'启用服务: {service_name}')
             
             final_config = {
@@ -151,16 +192,19 @@ def register_routes(app):
                 return jsonify(result), 500
                 
         except ValueError as e:
-            return handle_api_error(e, 400)
+            return handle_api_error(e, 400, expose_message=True)
         except Exception as e:
             return handle_api_error(e)
 
     @app.route('/api/deploy', methods=['POST'])
+    @require_api_token
     def deploy_instance():
         try:
             json_data = request.get_json()
             if not json_data:
                 return handle_api_error('未提供JSON数据', 400)
+            if not isinstance(json_data, dict):
+                return handle_api_error('JSON格式无效，必须是对象', 400)
             
             if 'openstack' not in json_data:
                 return handle_api_error('缺少OpenStack配置', 400)
@@ -178,11 +222,12 @@ def register_routes(app):
                 return jsonify(result), 500
                 
         except ValueError as e:
-            return handle_api_error(e, 400)
+            return handle_api_error(e, 400, expose_message=True)
         except Exception as e:
             return handle_api_error(e)
 
     @app.route('/api/instance/status/<instance_name>', methods=['GET'])
+    @require_api_token
     def instance_status(instance_name):
         try:
             logger.info(f'查询实例状态: {instance_name}')
@@ -197,6 +242,7 @@ def register_routes(app):
             return handle_api_error(e)
 
     @app.route('/api/instances', methods=['GET'])
+    @require_api_token
     def instances():
         try:
             logger.info('查询所有实例')

@@ -31,8 +31,16 @@ Cloud-Init-App-Deployer/
 ### 1. 启动服务
 ```bash
 pip install -r requirements.txt
+# 复制示例环境变量文件后进行修改
+cp .env.example .env
+# 将私密变量写入 .env 或通过其它安全方式注入到环境
+set -a
+source .env
+set +a
 python3 app.py
 ```
+
+服务启动后，所有受保护接口都必须在请求头中携带 `X-API-Key: <API_TOKEN>`。
 
 ### 2. 部署实例（推荐方式）
 
@@ -40,6 +48,7 @@ python3 app.py
 ```bash
 curl -X POST http://localhost:5000/api/deploy-services \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-strong-token" \
   -d '{
     "openstack": {
       "instance_name": "test",
@@ -57,7 +66,7 @@ curl -X POST http://localhost:5000/api/deploy-services \
 
 ### 3. 查看实例
 ```bash
-curl http://localhost:5000/api/instances
+curl http://localhost:5000/api/instances -H "X-API-Key: your-strong-token"
 ```
 
 ### 配置生成接口使用示例
@@ -67,6 +76,7 @@ curl http://localhost:5000/api/instances
 # 生成配置内容（仅返回内容，不生成文件）
 curl -X POST http://localhost:5000/api/generate-config \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-strong-token" \
   -d '{
     "openstack": {
       "image": "Ubuntu 22.04"
@@ -79,6 +89,7 @@ curl -X POST http://localhost:5000/api/generate-config \
 # 生成配置并保存到文件
 curl -X POST "http://localhost:5000/api/generate-config?save=true" \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-strong-token" \
   -d '{
     "openstack": {
       "image": "Ubuntu 22.04"
@@ -91,6 +102,7 @@ curl -X POST "http://localhost:5000/api/generate-config?save=true" \
 # 自定义文件名保存
 curl -X POST "http://localhost:5000/api/generate-config?save=true&filename=my-config.yaml" \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-strong-token" \
   -d '{
     "openstack": {
       "image": "Ubuntu 22.04"

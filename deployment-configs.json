@@ -95,9 +95,9 @@
         "cd /opt/lobechat"
       ],
       "environment": {
-        "OPENAI_API_KEY": "sk-xxxx",
-        "OPENAI_PROXY_URL": "https://api-proxy.com/v1",
-        "ACCESS_CODE": "lobe66"
+        "OPENAI_API_KEY": "<set-via-secret-store>",
+        "OPENAI_PROXY_URL": "<optional-proxy-url>",
+        "ACCESS_CODE": "<change-me>"
       },
       "docker_compose": {
         "version": "3.8",
