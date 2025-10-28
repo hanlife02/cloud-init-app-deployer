@@ -1,10 +1,14 @@
 import json
+from pathlib import Path
 from typing import Dict, Any
+
+
+CONFIG_PATH = Path(__file__).resolve().with_name('deployment-configs.json')
 
 
 def load_deployment_configs() -> Dict[str, Any]:
     try:
-        with open('deployment-configs.json', 'r', encoding='utf-8') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
         return {'deployments': {}}
@@ -14,7 +18,7 @@ def load_deployment_configs() -> Dict[str, Any]:
 
 def load_docker_install_configs() -> Dict[str, Any]:
     try:
-        with open('deployment-configs.json', 'r', encoding='utf-8') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
             return {
                 'docker_install_configs': config.get('docker_install_configs', {}),

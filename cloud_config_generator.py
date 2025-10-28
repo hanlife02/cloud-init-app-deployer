@@ -19,12 +19,24 @@ def _render_heredoc(target_path: str, content: str) -> str:
 
 def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
     """为LobeChat生成docker-compose文件和自动更新脚本"""
+    if not isinstance(service_config, dict):
+        raise ValueError("LobeChat服务配置必须是对象")
+
+    docker_compose = service_config.get('docker_compose')
+    if not isinstance(docker_compose, dict):
+        raise ValueError("LobeChat服务缺少docker_compose配置块")
+
+    services = docker_compose.get('services')
+    version = docker_compose.get('version')
+    if not isinstance(services, dict) or not version:
+        raise ValueError("LobeChat docker_compose配置不完整，必须包含version和services")
+
     files_commands = []
     
     # 生成docker-compose.yml文件
     docker_compose_content = {
-        'version': service_config['docker_compose']['version'],
-        'services': copy.deepcopy(service_config['docker_compose']['services'])
+        'version': version,
+        'services': copy.deepcopy(services)
     }
     
     # 替换环境变量
@@ -33,8 +45,9 @@ def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
             for env_key, env_value in service['environment'].items():
                 if env_value.startswith('${') and env_value.endswith('}'):
                     var_name = env_value[2:-1]  # 移除 ${ 和 }
-                    if 'environment' in service_config and var_name in service_config['environment']:
-                        service['environment'][env_key] = service_config['environment'][var_name]
+                    if 'environment' in service_config and isinstance(service_config['environment'], dict):
+                        if var_name in service_config['environment']:
+                            service['environment'][env_key] = service_config['environment'][var_name]
     
     docker_compose_yaml = yaml.dump(docker_compose_content, default_flow_style=False, allow_unicode=True, indent=2)
     
@@ -58,7 +71,13 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
     try:
         deployment_configs = load_deployment_configs()
         
-        enabled_services = list(config_data.get('deployments', {}).keys())
+        deployments_section = config_data.get('deployments', {})
+        if deployments_section is None:
+            deployments_section = {}
+        if not isinstance(deployments_section, dict):
+            raise ValueError("deployments字段必须为对象")
+
+        enabled_services = list(deployments_section.keys())
         logger.info(f"启用的服务: {enabled_services}")
         
         cloud_config = {
@@ -77,7 +96,10 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
         
         for service in enabled_services:
             logger.info(f"处理服务: {service}")
-            service_config = copy.deepcopy(config_data['deployments'][service])
+            raw_service_config = deployments_section.get(service)
+            if not isinstance(raw_service_config, dict):
+                raise ValueError(f"{service} 配置必须为对象")
+            service_config = copy.deepcopy(raw_service_config)
             
             if service == 'docker':
                 try:
