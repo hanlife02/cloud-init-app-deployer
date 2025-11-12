@@ -1,5 +1,6 @@
 import copy
 import logging
+import os
 from typing import Dict, Any
 import yaml
 from config_manager import get_docker_config_for_image, load_deployment_configs
@@ -32,13 +33,13 @@ def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
         raise ValueError("LobeChat docker_compose配置不完整，必须包含version和services")
 
     files_commands = []
-    
+
     # 生成docker-compose.yml文件
     docker_compose_content = {
         'version': version,
         'services': copy.deepcopy(services)
     }
-    
+
     # 替换环境变量
     for service_name, service in docker_compose_content['services'].items():
         if 'environment' in service:
@@ -48,21 +49,55 @@ def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
                     if 'environment' in service_config and isinstance(service_config['environment'], dict):
                         if var_name in service_config['environment']:
                             service['environment'][env_key] = service_config['environment'][var_name]
-    
+
     docker_compose_yaml = yaml.dump(docker_compose_content, default_flow_style=False, allow_unicode=True, indent=2)
-    
+
     files_commands.append("mkdir -p /opt/lobechat")
     files_commands.append(_render_heredoc("/opt/lobechat/docker-compose.yml", docker_compose_yaml))
-    
+
     # 生成自动更新脚本
     update_script = service_config.get('auto_update_script', '')
     if update_script:
         files_commands.append(_render_heredoc("/opt/lobechat/auto-update-lobe-chat.sh", update_script))
         files_commands.append("chmod +x /opt/lobechat/auto-update-lobe-chat.sh")
-        
+
         # 添加到crontab
         files_commands.append("(crontab -l 2>/dev/null; echo '0 2 * * * /opt/lobechat/auto-update-lobe-chat.sh >> /var/log/lobe-chat-update.log 2>&1') | crontab -")
-    
+
+    return files_commands
+
+
+def generate_1panel_install(service_config: Dict[str, Any]) -> list:
+    """为1Panel生成安装脚本"""
+    if not isinstance(service_config, dict):
+        raise ValueError("1Panel服务配置必须是对象")
+
+    files_commands = []
+
+    # 读取1Panel安装脚本
+    script_path = os.path.join(os.path.dirname(__file__), 'services', 'install-1panel.sh')
+    try:
+        with open(script_path, 'r', encoding='utf-8') as f:
+            install_script = f.read()
+
+        # 设置安装模式（stable, beta, dev）
+        install_mode = service_config.get('install_mode', 'stable')
+        install_dir = service_config.get('install_dir', '/tmp')
+
+        # 将安装脚本写入到目标系统
+        files_commands.append(f"mkdir -p {install_dir}")
+        files_commands.append(_render_heredoc(f"{install_dir}/install-1panel.sh", install_script))
+        files_commands.append(f"chmod +x {install_dir}/install-1panel.sh")
+
+        # 执行安装脚本
+        files_commands.append(f"cd {install_dir}")
+        files_commands.append(f"INSTALL_MODE={install_mode} bash {install_dir}/install-1panel.sh")
+
+        logger.info("已添加1Panel安装配置")
+    except Exception as e:
+        logger.error(f"读取1Panel安装脚本失败: {str(e)}")
+        raise ValueError(f"无法读取1Panel安装脚本: {str(e)}")
+
     return files_commands
 
 
@@ -148,15 +183,22 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
                             'systemctl start docker',
                             'usermod -aG docker ubuntu'
                         ])
-                
+
                 # 生成LobeChat特定的文件和配置
                 lobechat_files = generate_lobechat_files(service_config)
                 commands.extend(lobechat_files)
-                
+
                 # 启动LobeChat服务
                 commands.append('cd /opt/lobechat && docker-compose up -d')
                 logger.info("已添加LobeChat部署和自动更新配置")
-            
+
+            # 特殊处理1Panel部署
+            if service == '1panel':
+                # 生成1Panel安装配置
+                onepanel_install = generate_1panel_install(service_config)
+                commands.extend(onepanel_install)
+                logger.info("已添加1Panel安装配置")
+
             if service_config.get('test_container', False) and 'test_commands' in service_config:
                 commands.extend(service_config['test_commands'])
         

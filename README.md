@@ -117,6 +117,7 @@ curl -X POST "http://localhost:5000/api/generate-config?save=true&filename=my-co
 
 - `docker` - Docker 容器引擎（支持 Ubuntu、CentOS、Debian 系统的智能安装）
 - `lobechat` - LobeChat AI聊天应用（基于Docker部署，包含自动更新功能）
+- `1panel` - 1Panel Linux服务器运维管理面板（支持主流Linux发行版）
 
 ### LobeChat服务详情
 
@@ -143,3 +144,56 @@ http://实例IP:3210
 - `/opt/lobechat/docker-compose.yml` - Docker Compose配置文件
 - `/opt/lobechat/auto-update-lobe-chat.sh` - 自动更新脚本
 - 自动添加到crontab的定时任务
+
+### 1Panel服务详情
+
+#### 功能特性
+- 自动检测系统架构和操作系统
+- 支持stable、beta、dev三种安装模式
+- 自动下载并验证安装包的SHA256哈希值
+- 完整的Docker管理功能
+- 应用商店一键安装常用应用
+- 文件管理、数据库管理、网站管理等功能
+
+#### 系统要求
+- 操作系统：Ubuntu 20.04/22.04、CentOS 7/8、Debian 10/11（包括国产操作系统）
+- 服务器架构：x86_64、aarch64、armv7l、ppc64le、s390x
+- 内存要求：建议可用内存在 1GB 以上
+- 浏览器要求：Chrome、FireFox、IE10+、Edge 等现代浏览器
+
+#### 访问方式
+部署完成后，1Panel会在控制台输出访问信息：
+```
+http://服务器IP:端口/安全入口
+```
+
+登录服务器后，可通过以下命令查看访问信息：
+```bash
+1pctl user-info
+```
+
+#### 使用示例
+```bash
+# 部署1Panel
+curl -X POST http://localhost:5000/api/deploy-services \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-strong-token" \
+  -d '{
+    "openstack": {
+      "instance_name": "panel-server",
+      "image": "Ubuntu 22.04",
+      "flavor": "p2",
+      "network": "pku",
+      "key_name": "Ethan"
+    },
+    "enable_1panel": true
+  }'
+```
+
+#### 注意事项
+1. 确保OpenStack安全组开放1Panel的访问端口（默认端口会在安装时随机生成）
+2. 安装完成后，请及时记录并妥善保管安全入口地址
+3. 首次登录后建议修改默认密码
+4. 1Panel会在 `/tmp` 目录下载安装包，安装完成后会自动清理
+5. 支持通过 `1pctl` 命令行工具进行维护和管理
+6. 官方文档：https://1panel.cn/docs/

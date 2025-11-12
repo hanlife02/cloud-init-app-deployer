@@ -131,9 +131,10 @@ def register_routes(app):
                 'enable_nginx': True,
                 'enable_mysql': False,
                 'enable_nodejs': False,
-                'enable_lobechat': False
+                'enable_lobechat': False,
+                'enable_1panel': False
             },
-            'available_services': ['docker', 'nginx', 'mysql', 'nodejs', 'lobechat'],
+            'available_services': ['docker', 'nginx', 'mysql', 'nodejs', 'lobechat', '1panel'],
             'example_request_deploy': {
                 'openstack': {
                     'instance_name': 'test',
