@@ -3,6 +3,14 @@ import os
 from flask import Flask
 from api_routes import register_routes
 
+# 尝试自动加载当前目录下的 .env，使修改 .env 后直接 python app.py 即可生效
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # 如果未安装 python-dotenv，则退回到仅使用系统环境变量
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'

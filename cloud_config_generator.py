@@ -18,51 +18,41 @@ def _render_heredoc(target_path: str, content: str) -> str:
     ])
 
 
-def generate_lobechat_files(service_config: Dict[str, Any]) -> list:
-    """为LobeChat生成docker-compose文件和自动更新脚本"""
+def generate_lobechat_install(service_config: Dict[str, Any]) -> list:
+    """为LobeChat生成安装脚本调用"""
     if not isinstance(service_config, dict):
         raise ValueError("LobeChat服务配置必须是对象")
 
-    docker_compose = service_config.get('docker_compose')
-    if not isinstance(docker_compose, dict):
-        raise ValueError("LobeChat服务缺少docker_compose配置块")
-
-    services = docker_compose.get('services')
-    version = docker_compose.get('version')
-    if not isinstance(services, dict) or not version:
-        raise ValueError("LobeChat docker_compose配置不完整，必须包含version和services")
-
     files_commands = []
 
-    # 生成docker-compose.yml文件
-    docker_compose_content = {
-        'version': version,
-        'services': copy.deepcopy(services)
-    }
+    script_path = os.path.join(os.path.dirname(__file__), 'services', 'install-lobechat.sh')
+    try:
+        with open(script_path, 'r', encoding='utf-8') as f:
+            install_script = f.read()
 
-    # 替换环境变量
-    for service_name, service in docker_compose_content['services'].items():
-        if 'environment' in service:
-            for env_key, env_value in service['environment'].items():
-                if env_value.startswith('${') and env_value.endswith('}'):
-                    var_name = env_value[2:-1]  # 移除 ${ 和 }
-                    if 'environment' in service_config and isinstance(service_config['environment'], dict):
-                        if var_name in service_config['environment']:
-                            service['environment'][env_key] = service_config['environment'][var_name]
+        install_dir = service_config.get('install_dir', '/opt/lobechat')
+        env_config = service_config.get('environment', {}) or {}
 
-    docker_compose_yaml = yaml.dump(docker_compose_content, default_flow_style=False, allow_unicode=True, indent=2)
+        files_commands.append(f"mkdir -p {install_dir}")
+        files_commands.append(_render_heredoc(f"{install_dir}/install-lobechat.sh", install_script))
+        files_commands.append(f"chmod +x {install_dir}/install-lobechat.sh")
 
-    files_commands.append("mkdir -p /opt/lobechat")
-    files_commands.append(_render_heredoc("/opt/lobechat/docker-compose.yml", docker_compose_yaml))
+        env_parts = [f"LOBECHAT_INSTALL_DIR={install_dir}"]
+        if 'OPENAI_API_KEY' in env_config:
+            env_parts.append(f"OPENAI_API_KEY='{env_config['OPENAI_API_KEY']}'")
+        if 'OPENAI_PROXY_URL' in env_config:
+            env_parts.append(f"OPENAI_PROXY_URL='{env_config['OPENAI_PROXY_URL']}'")
+        if 'ACCESS_CODE' in env_config:
+            env_parts.append(f"ACCESS_CODE='{env_config['ACCESS_CODE']}'")
 
-    # 生成自动更新脚本
-    update_script = service_config.get('auto_update_script', '')
-    if update_script:
-        files_commands.append(_render_heredoc("/opt/lobechat/auto-update-lobe-chat.sh", update_script))
-        files_commands.append("chmod +x /opt/lobechat/auto-update-lobe-chat.sh")
+        env_prefix = " ".join(env_parts)
+        files_commands.append(f"cd {install_dir}")
+        files_commands.append(f"{env_prefix} bash {install_dir}/install-lobechat.sh")
 
-        # 添加到crontab
-        files_commands.append("(crontab -l 2>/dev/null; echo '0 2 * * * /opt/lobechat/auto-update-lobe-chat.sh >> /var/log/lobe-chat-update.log 2>&1') | crontab -")
+        logger.info("已添加LobeChat安装配置")
+    except Exception as e:
+        logger.error(f"读取Lobechat安装脚本失败: {str(e)}")
+        raise ValueError(f"无法读取Lobechat安装脚本: {str(e)}")
 
     return files_commands
 
@@ -115,15 +105,6 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
         enabled_services = list(deployments_section.keys())
         logger.info(f"启用的服务: {enabled_services}")
         
-        cloud_config = {
-            '#cloud-config': None,
-            'package_update': True,
-            'package_upgrade': True,
-            'packages': [],
-            'runcmd': [],
-            'final_message': '应用部署完成'
-        }
-        
         packages = set()
         commands = []
         
@@ -136,82 +117,63 @@ def generate_cloud_config(config_data: Dict[str, Any]) -> str:
                 raise ValueError(f"{service} 配置必须为对象")
             service_config = copy.deepcopy(raw_service_config)
             
+            # Docker 通过脚本安装
             if service == 'docker':
+                install_dir = service_config.get('install_dir', '/tmp')
+                script_path = os.path.join(os.path.dirname(__file__), 'services', 'install-docker.sh')
                 try:
-                    docker_config = get_docker_config_for_image(image_name)
-                    service_config['packages'] = docker_config['packages']
-                    service_config['commands'] = docker_config['commands']
-                    logger.info(f"Docker配置已适配镜像: {image_name}")
+                    with open(script_path, 'r', encoding='utf-8') as f:
+                        docker_script = f.read()
+                    commands.append(f'# {service} 配置')
+                    commands.append(f"mkdir -p {install_dir}")
+                    commands.append(_render_heredoc(f"{install_dir}/install-docker.sh", docker_script))
+                    commands.append(f"chmod +x {install_dir}/install-docker.sh")
+                    commands.append(f"cd {install_dir}")
+                    commands.append(f"bash {install_dir}/install-docker.sh")
+                    logger.info("已添加Docker安装配置")
                 except Exception as e:
-                    logger.warning(f"获取Docker配置失败，使用默认配置: {str(e)}")
-                    if 'deployments' in deployment_configs and 'docker' in deployment_configs['deployments']:
-                        default_docker = copy.deepcopy(deployment_configs['deployments']['docker'])
-                        if 'packages' not in service_config and 'packages' in default_docker:
-                            service_config['packages'] = default_docker['packages']
-                        if 'commands' not in service_config and 'commands' in default_docker:
-                            service_config['commands'] = default_docker['commands']
-            else:
-                if 'deployments' in deployment_configs and service in deployment_configs['deployments']:
-                    default_service = copy.deepcopy(deployment_configs['deployments'][service])
-                    if 'packages' not in service_config and 'packages' in default_service:
-                        service_config['packages'] = default_service['packages']
-                    if 'commands' not in service_config and 'commands' in default_service:
-                        service_config['commands'] = default_service['commands']
-            
-            if 'packages' in service_config:
-                packages.update(service_config['packages'])
-            
-            commands.append(f'# {service} 配置')
-            if 'commands' in service_config:
-                commands.extend(service_config['commands'])
-            
-            # 特殊处理LobeChat部署
+                    logger.error(f"读取Docker安装脚本失败: {str(e)}")
+                    raise ValueError(f"无法读取Docker安装脚本: {str(e)}")
+
+            # LobeChat 部署通过脚本安装
             if service == 'lobechat':
-                # 首先检查并安装Docker
+                # 确保 Docker 安装
                 if 'docker' not in enabled_services:
-                    logger.info("LobeChat需要Docker，自动添加Docker安装步骤")
+                    logger.info("LobeChat需要Docker，自动添加Docker安装脚本执行")
+                    docker_service_cfg = deployment_configs.get('deployments', {}).get('docker', {'install_dir': '/tmp'})
+                    docker_install_dir = docker_service_cfg.get('install_dir', '/tmp')
+                    script_path = os.path.join(os.path.dirname(__file__), 'services', 'install-docker.sh')
                     try:
-                        docker_config = get_docker_config_for_image(image_name)
-                        packages.update(docker_config['packages'])
+                        with open(script_path, 'r', encoding='utf-8') as f:
+                            docker_script = f.read()
                         commands.append('# Docker 自动配置')
-                        commands.extend(docker_config['commands'])
+                        commands.append(f"mkdir -p {docker_install_dir}")
+                        commands.append(_render_heredoc(f"{docker_install_dir}/install-docker.sh", docker_script))
+                        commands.append(f"chmod +x {docker_install_dir}/install-docker.sh")
+                        commands.append(f"cd {docker_install_dir}")
+                        commands.append(f"bash {docker_install_dir}/install-docker.sh")
                     except Exception as e:
-                        logger.warning(f"获取Docker配置失败: {str(e)}")
-                        commands.extend([
-                            'apt-get install -y docker.io',
-                            'systemctl enable docker',
-                            'systemctl start docker',
-                            'usermod -aG docker ubuntu'
-                        ])
+                        logger.error(f"读取Docker安装脚本失败: {str(e)}")
+                        raise ValueError(f"无法读取Docker安装脚本: {str(e)}")
 
-                # 生成LobeChat特定的文件和配置
-                lobechat_files = generate_lobechat_files(service_config)
-                commands.extend(lobechat_files)
+                lobechat_install = generate_lobechat_install(service_config)
+                commands.extend(lobechat_install)
 
-                # 启动LobeChat服务
-                commands.append('cd /opt/lobechat && docker-compose up -d')
-                logger.info("已添加LobeChat部署和自动更新配置")
-
-            # 特殊处理1Panel部署
+            # 1Panel 部署通过脚本安装
             if service == '1panel':
-                # 生成1Panel安装配置
                 onepanel_install = generate_1panel_install(service_config)
                 commands.extend(onepanel_install)
-                logger.info("已添加1Panel安装配置")
 
             if service_config.get('test_container', False) and 'test_commands' in service_config:
                 commands.extend(service_config['test_commands'])
         
-        cloud_config['packages'] = sorted(list(packages))
-        cloud_config['runcmd'] = commands
-        
         yaml_content = "#cloud-config\n\n"
         yaml_content += yaml.dump({
-            'package_update': cloud_config['package_update'],
-            'package_upgrade': cloud_config['package_upgrade'],
-            'packages': cloud_config['packages'],
-            'runcmd': cloud_config['runcmd'],
-            'final_message': cloud_config['final_message']
+            'package_update': True,
+            'package_upgrade': True,
+            'packages': sorted(list(packages)),
+            'runcmd': commands,
+            'final_message': '应用部署完成'
         }, default_flow_style=False, allow_unicode=True, indent=2)
         
         logger.info(f"Cloud-Init配置已生成，包含{len(packages)}个包和{len(commands)}条命令")
